@@ -1,0 +1,22 @@
+---
+title: "Network Sci Final Project"
+author: "Ellen Graham"
+date: "10/7/2020"
+output: html_document
+---
+
+
+```{r}
+library(tidyverse)
+
+vote_data <- vroom::vroom(here::here("data", "HSall_votes.csv"))
+```
+
+```{r}
+vote_data %>% 
+  filter(chamber == "Senate") %>% 
+  filter(congress > 79)
+
+
+```
+
