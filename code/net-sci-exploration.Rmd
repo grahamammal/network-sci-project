@@ -8,15 +8,114 @@ output: html_document
 
 ```{r}
 library(tidyverse)
+library(reshape2)
+library(Rcpp)
 
+# Data from https://voteview.com/data
 vote_data <- vroom::vroom(here::here("data", "HSall_votes.csv"))
+member_data <- vroom::vroom(here::here("data", "HSall_members.csv"))
+
+sourceCpp(here::here("src", "c-helpers.cpp"))
 ```
 
 ```{r}
-vote_data %>% 
+senate_116 <- vote_data %>% 
   filter(chamber == "Senate") %>% 
-  filter(congress > 79)
+  filter(congress == 116) %>% 
+  mutate(index = 0:(n() - 1))
 
+cast_code_116_1 <- senate_116 %>% 
+  filter(rollnumber == 1) %>% 
+  pull(cast_code)
 
 ```
+
+```{r}
+start_index <- senate_116 %>% 
+  group_by(rollnumber) %>% 
+  slice_head(n = 1)
+
+end_index <- senate_116 %>% 
+  group_by(rollnumber) %>% 
+  slice_tail(n = 1)
+
+senate_116 %>% 
+  group_by(rollnumber) %>% 
+  count()
+```
+
+
+I think we'll need to write some C to do this?
+```{r}
+vote_codes_mat <- senate_116 %>% 
+  select(icpsr, rollnumber, cast_code) %>% 
+  pivot_wider(names_from = rollnumber, 
+              values_from = cast_code,
+              values_fill = -1) %>% 
+  arrange(icpsr) %>% 
+  select(-icpsr) %>% 
+  as.matrix()
+
+
+senate_list <- vote_data %>% 
+  filter(chamber == "Senate") %>% 
+  group_by(congress) %>% 
+  group_split()
+
+get_vote_code_mat <- function(.data) {
+  .data %>% 
+    select(icpsr, rollnumber, cast_code) %>% 
+    pivot_wider(names_from = rollnumber, 
+                values_from = cast_code,
+                values_fill = -1) %>% 
+    arrange(icpsr) %>% 
+    select(-icpsr) %>% 
+    as.matrix()
+}
+
+vote_mat_list <- senate_list %>% 
+  map(get_vote_code_mat)
+
+adj_mat_list <- vote_mat_list %>% 
+  map(edges_for_session)
+
+named_adj_mat <- map2(senate_list, adj_mat_list, function(x,y) {
+                                       name <- select(x, icpsr) %>% 
+                                         arrange(icpsr) %>% 
+                                         left_join(member_data, by = "icpsr") %>% 
+                                         select(icpsr, bioname) %>% 
+                                         group_by(icpsr) %>% 
+                                         slice_head(n = 1) %>% 
+                                         ungroup() %>% 
+                                         pull(bioname)
+                                       dimnames(y) <- list(name, name)
+                                       
+                                       y
+                                     })
+
+```
+
+Put into proper format
+```{r}
+melted_adj_mats <- map(named_adj_mat, ~(.x %>% 
+  melt() %>% 
+  rename(Source = Var1, Target = Var2, Weight = value)))
+
+final_format <- bind_rows(melted_adj_mats, .id = "Timestamp") %>% 
+  mutate(Type = "Undirected") %>% 
+  relocate(Timestamp, .after = Type)
+```
+
+Write out data:
+```{r}
+write_csv(final_format, here::here("data", "timestamped_data.csv"))
+```
+
+
+Could use geolayout to specify where to put things where we put, with say PCA 1st and 2nd vec projection as lat and long. Scale things so that the projection doesn't mess things up. 
+
+Can try factoring out top svd vectors to see whats left. 
+
+
+See how coordinates relate to communities! Called a spectral layout. 
 
