@@ -82,12 +82,8 @@ adj_mat_list <- vote_mat_list %>%
 named_adj_mat <- map2(senate_list, adj_mat_list, function(x,y) {
                                        name <- select(x, icpsr) %>% 
                                          arrange(icpsr) %>% 
-                                         left_join(member_data, by = "icpsr") %>% 
-                                         select(icpsr, bioname) %>% 
-                                         group_by(icpsr) %>% 
-                                         slice_head(n = 1) %>% 
-                                         ungroup() %>% 
-                                         pull(bioname)
+                                         pull(icpsr) %>% 
+                                         unique()
                                        dimnames(y) <- list(name, name)
                                        
                                        y
@@ -116,6 +112,23 @@ Could use geolayout to specify where to put things where we put, with say PCA 1s
 
 Can try factoring out top svd vectors to see whats left. 
 
-
 See how coordinates relate to communities! Called a spectral layout. 
+
+```{r}
+filtered_weights <- final_format %>% 
+  group_by(Timestamp) %>% 
+  mutate(Weight = ifelse(Weight > median(Weight), Weight/max(Weight), 0))
+```
+
+```{r}
+write_csv(filtered_weights, here::here("data", "filtered_weights.csv"))
+```
+
+```{r}
+member_data %>% 
+  filter(chamber %in% c("Senate", "President")) %>% 
+  select(congress, chamber, icpsr, state_abbrev, party_code, bioname) %>% 
+  rename(Id = icpsr) %>% 
+  write_csv(here::here("data", "node_data.csv"))
+```
 
