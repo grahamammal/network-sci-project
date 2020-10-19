@@ -1,0 +1,89 @@
+---
+title: "Senate Votes Network"
+author: "Ellen Graham, Brian White"
+date: "10/19/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(reshape2)
+library(Rcpp)
+library(gganimate)
+library(ggraph)
+library(tidygraph)
+library(glue)
+# Data from https://voteview.com/data
+vote_data <- vroom::vroom(here::here("data", "HSall_votes.csv"))
+member_data <- vroom::vroom(here::here("data", "HSall_members.csv"))
+
+theme_set(theme_minimal())
+
+sourceCpp(here::here("src", "c-helpers.cpp"))
+
+
+source(here::here("code", "data_prep.R"))
+```
+
+
+```{r}
+animation <- projected_coords_party %>% 
+  ggplot() +
+  geom_point(aes(x = V1, 
+                 y = V2, 
+                 group = icpsr,
+                 color = party_name)) +
+  scale_color_manual(values = c("#5768AC", "#989898", "#FA5A50")) +
+  labs(x = "First Singular Vector",
+       y = "Second Singular Vector", 
+       color = NULL) +
+  transition_states(congress, 
+                    transition_length = 4,
+                    state_length = 1) +
+  ease_aes('linear') +
+  ggtitle('Congress {closest_state}') +
+  enter_fade() +
+  exit_fade()
+
+
+
+animate(
+  animation,
+  nframes = 5*116
+)
+
+```
+
+```{r}
+ggraph(higher_threshold, layout = cbind(x_svd, y_svd)) +
+  geom_node_point(aes(color = party_name)) +
+  geom_edge_arc(aes(edge_width = weight, color = edge_party), strength = 0.1, alpha = 0.3) +
+  scale_edge_color_manual(values = c("#989898", "#5768AC", "#FA5A50"), guide = "none") +
+  scale_color_manual(values = c("#5768AC", "#989898", "#FA5A50")) +
+  scale_edge_width(range = c(0.3, 1.3), guide = "none") +
+  labs(color = "Party",
+       x = "First Singular Vector", 
+       y = "Second Singular Vector") +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+
+```{r}
+senator_betweenness %>%
+  ggplot(aes(x = congress, y = betweenness, color = party_name)) +
+  geom_point(alpha = 1) +
+  scale_color_manual(values = c("#5768AC", "#989898", "#FA5A50")) +
+  labs(color = "Senator Party",
+       y = "Betweenness Centrality",
+       x = "Congress")
+
+```
+
+```{r}
+tibble(modularity = modularity_scores, congress = 1:116) %>% 
+  ggplot(aes(x = congress, y = modularity)) +
+  geom_point(color = "#784f9e") +
+  geom_line(color = "#89729E", alpha = 0.5) +
+  labs(x = "Congress", y = "Graph Modularity")
+```
+

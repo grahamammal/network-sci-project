@@ -1,65 +1,7 @@
----
-title: "Network Sci Final Project"
-author: "Ellen Graham"
-date: "10/7/2020"
-output: html_document
----
 
-
-```{r}
-library(tidyverse)
-library(reshape2)
-library(Rcpp)
-library(gganimate)
-library(ggraph)
-library(tidygraph)
-library(glue)
-# Data from https://voteview.com/data
-vote_data <- vroom::vroom(here::here("data", "HSall_votes.csv"))
-member_data <- vroom::vroom(here::here("data", "HSall_members.csv"))
-
-theme_set(theme_minimal())
-
-sourceCpp(here::here("src", "c-helpers.cpp"))
-```
-
-```{r}
-senate_116 <- vote_data %>% 
-  filter(chamber == "Senate") %>% 
-  filter(congress == 116) %>% 
-  mutate(index = 0:(n() - 1))
-
-cast_code_116_1 <- senate_116 %>% 
-  filter(rollnumber == 1) %>% 
-  pull(cast_code)
-
-```
-
-```{r}
-start_index <- senate_116 %>% 
-  group_by(rollnumber) %>% 
-  slice_head(n = 1)
-
-end_index <- senate_116 %>% 
-  group_by(rollnumber) %>% 
-  slice_tail(n = 1)
-
-senate_116 %>% 
-  group_by(rollnumber) %>% 
-  count()
-```
-
-
-I think we'll need to write some C to do this?
-```{r}
-vote_codes_mat <- senate_116 %>% 
-  select(icpsr, rollnumber, cast_code) %>% 
-  pivot_wider(names_from = rollnumber, 
-              values_from = cast_code,
-              values_fill = -1) %>% 
-  arrange(icpsr) %>% 
-  select(-icpsr) %>% 
-  as.matrix()
+####################################
+# Prepare Senate Vote List
+####################################
 
 
 senate_list <- vote_data %>% 
@@ -78,6 +20,11 @@ get_vote_code_mat <- function(.data) {
     as.matrix()
 }
 
+
+###################################
+# Calculate Adjacency Matrices
+###################################
+
 vote_mat_list <- senate_list %>% 
   map(get_vote_code_mat)
 
@@ -94,61 +41,53 @@ named_adj_mat <- map2(senate_list, adj_mat_list, function(x,y) {
                                        y
                                      })
 
-```
 
-Put into proper format
-```{r}
+
 melted_adj_mats <- map(named_adj_mat, ~{.x[lower.tri(.x)] <- NA
                                         .x %>% 
   melt(na.rm = TRUE) %>% 
   rename(Source = Var1, Target = Var2, Weight = value)})
 
+#####################################################
+# Put in different data formats
+# with different weights required ot count
+#####################################################
+
 final_format <- bind_rows(melted_adj_mats, .id = "Timestamp") %>% 
   mutate(Type = "Undirected") %>% 
   relocate(Timestamp, .after = Type)
-```
 
-Write out data:
-```{r}
-write_csv(final_format, here::here("data", "timestamped_data.csv"))
-```
-
-
-Could use geolayout to specify where to put things where we put, with say PCA 1st and 2nd vec projection as lat and long. Scale things so that the projection doesn't mess things up. 
-
-Can try factoring out top svd vectors to see whats left. 
-
-See how coordinates relate to communities! Called a spectral layout. 
-
-```{r}
 filtered_weights <- final_format %>% 
   group_by(Timestamp) %>% 
-  mutate(Weight = ifelse(Weight > median(Weight), Weight/max(Weight), 0))
-```
+  mutate(Weight = ifelse(Weight > median(Weight), Weight/max(Weight), 0)) %>% 
+  ungroup()
 
-```{r}
+parties <- read_csv(here::here("data", "HSall_parties.csv")) %>% 
+  select(party_code, party_name) %>% 
+  distinct() %>% 
+  mutate(party_name = ifelse(party_code == 200, "Republican", ifelse(party_code == 100, "Democrat", "Other")))
+
+################################################################
+# Begin writing data
+################################################################
+
+
+write_csv(final_format, here::here("data", "timestamped_data.csv"))
+
 write_csv(filtered_weights, here::here("data", "filtered_weights.csv"))
-```
 
-```{r}
+
 member_data %>% 
   filter(chamber %in% c("Senate", "President")) %>% 
   select(congress, chamber, icpsr, state_abbrev, party_code, bioname) %>% 
   rename(Id = icpsr) %>% 
   write_csv(here::here("data", "node_data.csv"))
-```
 
 
-```{r}
-parties <- read_csv(here::here("data", "HSall_parties.csv")) %>% 
-  select(party_code, party_name) %>% 
-  distinct() %>% 
-  mutate(party_name = ifelse(party_code == 200, "Republican", ifelse(party_code == 100, "Democrat", "Other")))
-parties %>% arrange(party_code)
-```
+#####################################
+# Start doing spectral projection
+#####################################
 
-
-```{r}
 svd_list <- map(adj_mat_list, svd)
 
 projected_coords <- map2(svd_list, named_adj_mat,  ~{ mat <- apply(.y, 1, 
@@ -186,40 +125,16 @@ projected_coords_party <- projected_coords %>%
   select(-party_code) %>% 
   distinct()
 
-animation <- projected_coords_party %>% 
-  ggplot() +
-  geom_point(aes(x = V1, 
-                 y = V2, 
-                 group = icpsr,
-                 color = party_name)) +
-  scale_color_manual(values = c("#5768AC", "#989898", "#FA5A50")) +
-  labs(x = "First Singular Vector",
-       y = "Second Singular Vector", 
-       color = NULL) +
-  transition_states(congress, 
-                    transition_length = 4,
-                    state_length = 1) +
-  ease_aes('linear') +
-  ggtitle('Congress {closest_state}') +
-  enter_fade() +
-  exit_fade()
 
 
 
-# animate(
-#   animation,
-#   nframes = 5*116
-# )
-```
 
 
 
-Using ggraph:
+##################################################
+# Start ggraph network vis
+##################################################
 
-```{r}
-# limit to small set for testing
-small_coords <- projected_coords_party %>% 
-  filter(congress > 113)
 
 node_tbl <- member_data %>% 
   filter(chamber %in% c("Senate", "President")) %>% 
@@ -249,8 +164,6 @@ edge_tbl <- filtered_weights %>%
   select(-party_name_from, -party_name_to)
 
 
-
-
 layout_coords <- projected_coords %>% 
   mutate(node_id = glue("{icpsr}_{congress}")) %>% 
   select(V1, V2, node_id)
@@ -265,10 +178,7 @@ network_data <- tbl_graph(nodes = node_tbl,
           directed = FALSE,
           node_key = "node_id")
 
-```
 
-
-```{r, fig.width=10, fig.height=8}
 
 higher_threshold <- network_data %>% 
   activate(edges) %>% 
@@ -285,22 +195,12 @@ y_svd <- higher_threshold %>%
   activate(nodes) %>% 
   pull(y_svd)
 
-ggraph(higher_threshold, layout = cbind(x_svd, y_svd)) +
-  geom_node_point(aes(color = party_name)) +
-  geom_edge_arc(aes(edge_width = weight, color = edge_party), strength = 0.1, alpha = 0.3) +
-  scale_edge_color_manual(values = c("#989898", "#5768AC", "#FA5A50"), guide = "none") +
-  scale_color_manual(values = c("#5768AC", "#989898", "#FA5A50")) +
-  scale_edge_width(range = c(0.3, 1.3), guide = "none") +
-  labs(color = "Party",
-       x = "First Singular Vector", 
-       y = "Second Singular Vector") +
-  theme_minimal() +
-  theme(legend.position = "right")
-```
 
-Betweenness work:
+#############################################
+# Betweenness and modularity prep
+#############################################
 
-```{r}
+
 edge_tbl_list <- edge_tbl %>% 
   filter(weight > quantile(weight, 0.4)) %>% 
   mutate(congress = as.numeric(congress)) %>% 
@@ -323,15 +223,6 @@ senator_betweenness <- map(network_list, ~(.x %>%
   bind_rows()
 
 
-senator_betweenness %>%
-  ggplot(aes(x = congress, y = betweenness, color = party_name)) +
-  geom_point(alpha = 1) +
-  scale_color_manual(values = c("#5768AC", "#989898", "#FA5A50")) +
-  labs(color = "Senator Party",
-       y = "Betweenness Centrality",
-       x = "Congress")
-
-
 modularity_scores <- map_dbl(network_list, ~(.x %>% 
   activate(nodes) %>% 
   mutate(group = group_fast_greedy()) %>% 
@@ -341,10 +232,4 @@ modularity_scores <- map_dbl(network_list, ~(.x %>%
   pull(modularity)))
 
 
-tibble(modularity = modularity_scores, congress = 1:116) %>% 
-  ggplot(aes(x = congress, y = modularity)) +
-  geom_point(color = "#784f9e") +
-  geom_line(color = "#89729E", alpha = 0.5) +
-  labs(x = "Congress", y = "Graph Modularity")
-```
-
+modularity_tbl <- tibble(modularity = modularity_scores, congress = 1:116)
