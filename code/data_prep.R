@@ -55,6 +55,9 @@ melted_adj_mats <- map(named_adj_mat, ~{.x[lower.tri(.x)] <- NA
 
 final_format <- bind_rows(melted_adj_mats, .id = "Timestamp") %>% 
   mutate(Type = "Undirected") %>% 
+  group_by(Timestamp) %>% 
+  mutate(Weight = Weight/(max(Weight))) %>% 
+  ungroup() %>% 
   relocate(Timestamp, .after = Type)
 
 filtered_weights <- final_format %>% 
@@ -67,22 +70,6 @@ parties <- read_csv(here::here("data", "HSall_parties.csv")) %>%
   distinct() %>% 
   mutate(party_name = ifelse(party_code == 200, "Republican", ifelse(party_code == 100, "Democrat", "Other")))
 
-################################################################
-# Begin writing data
-################################################################
-
-
-write_csv(final_format, here::here("data", "timestamped_data.csv"))
-
-write_csv(filtered_weights, here::here("data", "filtered_weights.csv"))
-
-
-member_data %>% 
-  filter(chamber %in% c("Senate", "President")) %>% 
-  select(congress, chamber, icpsr, state_abbrev, party_code, bioname) %>% 
-  rename(Id = icpsr) %>% 
-  write_csv(here::here("data", "node_data.csv"))
-
 
 #####################################
 # Start doing spectral projection
@@ -92,8 +79,8 @@ svd_list <- map(adj_mat_list, svd)
 
 projected_coords <- map2(svd_list, named_adj_mat,  ~{ mat <- apply(.y, 1, 
                                                       function(row) {
-                                                              c(sum(row*.x$u[,1]),
-                                                                sum(row*.x$u[,2]))
+                                                              c(sum(row*.x$u[,2]),
+                                                                sum(row*.x$u[,1]))
                                                              })
                                                       rbind(mat, rownames(.y))
                                                     }
@@ -146,7 +133,7 @@ node_tbl <- member_data %>%
   distinct() %>% 
   arrange(node_id)
 
-edge_tbl <- filtered_weights %>% 
+edge_tbl <- final_format %>% 
   mutate(to = as.character(Target),
          from = as.character(Source)) %>% 
   select(-Source, -Target, -Type) %>% 
@@ -160,7 +147,8 @@ edge_tbl <- filtered_weights %>%
   left_join(node_tbl, by = c("from" = "node_id")) %>% 
   select(weight:from, party_name, party_name_to) %>% 
   rename(congress = congress.x, party_name_from = party_name) %>% 
-  mutate(edge_party = ifelse(party_name_from == party_name_to, party_name_from, "Cross Party")) %>% 
+  mutate(edge_party = ifelse(party_name_from == party_name_to, party_name_from, "Cross Party"),
+         edge_party = factor(edge_party, levels = c("Democrat", "Republican", "Cross Party", "Other"))) %>% 
   select(-party_name_from, -party_name_to)
 
 
@@ -170,66 +158,13 @@ layout_coords <- projected_coords %>%
 
 node_tbl <- node_tbl %>% 
   left_join(layout_coords, by = "node_id") %>% 
-  rename(x_svd = V1, y_svd = V2)
+  rename(x_svd = V1, y_svd = V2) %>% 
+  mutate(party_name = factor(party_name, levels = c("Democrat", "Republican", "Other")))
 
   
-network_data <- tbl_graph(nodes = node_tbl,
+network_data_full <- tbl_graph(nodes = node_tbl,
           edges = edge_tbl,
           directed = FALSE,
           node_key = "node_id")
 
 
-
-higher_threshold <- network_data %>% 
-  activate(edges) %>% 
-  filter(weight > quantile(weight, 0.90)) %>% 
-  filter(congress == 116) %>%
-  activate(nodes) %>% 
-  filter(congress == 116)
-
-x_svd <- higher_threshold %>% 
-  activate(nodes) %>% 
-  pull(x_svd)
-
-y_svd <- higher_threshold %>% 
-  activate(nodes) %>% 
-  pull(y_svd)
-
-
-#############################################
-# Betweenness and modularity prep
-#############################################
-
-
-edge_tbl_list <- edge_tbl %>% 
-  filter(weight > quantile(weight, 0.4)) %>% 
-  mutate(congress = as.numeric(congress)) %>% 
-  group_by(congress) %>% 
-  group_split()
- 
-node_tbl_list <- node_tbl %>% 
-  group_by(congress) %>% 
-  group_split() 
-
-network_list <- map2(node_tbl_list, edge_tbl_list, ~tbl_graph(nodes = .x,
-                      edges = .y,
-                      directed = FALSE,
-                      node_key = "node_id"))
-
-senator_betweenness <- map(network_list, ~(.x %>% 
-    activate(nodes) %>% 
-    mutate(betweenness = centrality_betweenness(normalized = TRUE)) %>% 
-      as_tibble())) %>% 
-  bind_rows()
-
-
-modularity_scores <- map_dbl(network_list, ~(.x %>% 
-  activate(nodes) %>% 
-  mutate(group = group_fast_greedy()) %>% 
-  mutate(modularity = graph_modularity(group)) %>% 
-  as_tibble() %>% 
-  head(1) %>% 
-  pull(modularity)))
-
-
-modularity_tbl <- tibble(modularity = modularity_scores, congress = 1:116)

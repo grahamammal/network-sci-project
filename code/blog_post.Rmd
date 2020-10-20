@@ -2,7 +2,9 @@
 title: "Senate Votes Network"
 author: "Ellen Graham, Brian White"
 date: "10/19/2020"
-output: html_document
+output:
+  html_document:
+    theme: cosmo
 ---
 
 ```{r setup, include=FALSE}
@@ -23,8 +25,13 @@ sourceCpp(here::here("src", "c-helpers.cpp"))
 
 
 source(here::here("code", "data_prep.R"))
+
+knitr::opts_chunk$set(dev = "png", dev.args = list(type = "cairo-png"),
+                      echo = FALSE)
+
 ```
 
+## Animation
 
 ```{r}
 animation <- projected_coords_party %>% 
@@ -37,11 +44,11 @@ animation <- projected_coords_party %>%
   labs(x = "First Singular Vector",
        y = "Second Singular Vector", 
        color = NULL) +
-  transition_states(congress, 
+  transition_states((congress - 1)*2 + 1789, 
                     transition_length = 4,
                     state_length = 1) +
   ease_aes('linear') +
-  ggtitle('Congress {closest_state}') +
+  ggtitle('Congress Start Year: {closest_state}') +
   enter_fade() +
   exit_fade()
 
@@ -54,36 +61,165 @@ animate(
 
 ```
 
+
+
 ```{r}
+higher_threshold <- network_data_full %>% 
+  activate(edges) %>% 
+  filter(congress == 116) %>%
+  filter(weight > quantile(weight, 0.5)) %>% 
+  activate(nodes) %>% 
+  filter(congress == 116)
+
+x_svd <- higher_threshold %>% 
+  activate(nodes) %>% 
+  pull(x_svd)
+
+y_svd <- higher_threshold %>% 
+  activate(nodes) %>% 
+  pull(y_svd)
+```
+
+
+## Spectral Graph
+
+```{r}
+annotation_color = "#404040"
+annotation_size = 3.5
+
+
 ggraph(higher_threshold, layout = cbind(x_svd, y_svd)) +
-  geom_node_point(aes(color = party_name)) +
-  geom_edge_arc(aes(edge_width = weight, color = edge_party), strength = 0.1, alpha = 0.3) +
-  scale_edge_color_manual(values = c("#989898", "#5768AC", "#FA5A50"), guide = "none") +
-  scale_color_manual(values = c("#5768AC", "#989898", "#FA5A50")) +
+  geom_edge_arc(aes(edge_color = edge_party), strength = 0.1, alpha = 0.3) +
+  geom_node_point(aes(color = party_name), size = 1.5) +
+  scale_edge_color_manual(values = c("#5768AC", "#FA5A50", "#784f9e", "#989898")) +
+  scale_color_manual(values = c("#5768AC", "#FA5A50", "#989898")) +
   scale_edge_width(range = c(0.3, 1.3), guide = "none") +
+  guides(edge_color = guide_legend(override.aes = list(edge_alpha = 1, edge_width = 1.5))) +
   labs(color = "Party",
        x = "First Singular Vector", 
-       y = "Second Singular Vector") +
+       y = "Second Singular Vector",
+       edge_color = "Edge Party") +
   theme_minimal() +
-  theme(legend.position = "right")
+  theme(legend.position = "right") +
+  annotate("text", 
+           label = "Bernie Sanders", 
+           x = -0.45, y = -0.3, 
+           hjust = 0, vjust = 1, color = annotation_color,
+           size = annotation_size) +
+  annotate("segment",
+           x = -0.45, y = -0.3,
+           xend = -0.520, yend = -0.259, 
+           color = annotation_color) +
+  annotate("text", 
+           label = "Joe Manchin", 
+           x = -0.35, y = -1, 
+           hjust = 1, vjust = 1, color = annotation_color,
+           size = annotation_size) +
+  annotate("segment",
+           x = -0.246, y = -0.94,
+           xend = -0.35, yend = -1, 
+           color = annotation_color) +
+  annotate("text", 
+           label = "Johnny Isakson", 
+           x = 0.265, y = -0.449, 
+           hjust = 0, vjust = 0, color = annotation_color,
+           size = annotation_size)
+  
 ```
+
+```{r}
+edge_tbl_list <- edge_tbl %>% 
+  mutate(congress = as.numeric(congress)) %>% 
+  group_by(congress) %>% 
+  filter(weight > quantile(weight, 0.5)) %>% 
+  group_split()
+ 
+node_tbl_list <- node_tbl %>% 
+  group_by(congress) %>% 
+  group_split() 
+
+network_list <- map2(node_tbl_list, edge_tbl_list, ~tbl_graph(nodes = .x,
+                      edges = .y,
+                      directed = FALSE,
+                      node_key = "node_id"))
+
+senator_betweenness <- map(network_list, ~(.x %>% 
+    activate(nodes) %>% 
+    mutate(betweenness = centrality_betweenness(normalized = TRUE)) %>% 
+      as_tibble())) %>% 
+  bind_rows()
+
+```
+
+## Betweenness
 
 ```{r}
 senator_betweenness %>%
-  ggplot(aes(x = congress, y = betweenness, color = party_name)) +
+  mutate(year = (congress - 1)*2 + 1789) %>% 
+  ggplot(aes(x = year, y = betweenness, color = party_name)) +
   geom_point(alpha = 1) +
-  scale_color_manual(values = c("#5768AC", "#989898", "#FA5A50")) +
+  scale_color_manual(values = c("#5768AC", "#FA5A50", "#989898")) +
   labs(color = "Senator Party",
        y = "Betweenness Centrality",
-       x = "Congress")
+       x = "Congress") +
+  annotate("text", 
+           label = "Susan Collins", 
+           x = (113 - 1) * 2 + 1789, y = 0.2450608, 
+           hjust = 1, vjust = 1, color = annotation_color,
+           size = annotation_size) +
+  annotate("text", 
+           label = "John Henderson", 
+           x = (28 - 1) * 2 + 1789, y = 0.128, 
+           hjust = 0, vjust = 0, color = annotation_color,
+           size = annotation_size)
 
 ```
+
+0.5 is a good threshold where the graphs are connected, but not too strongly connected to glean any differnce. Stable in range of 0.45-0.65 
+
+```{r}
+numeric
+modularity_scores <- map_dbl(network_list, ~(.x %>% 
+  activate(nodes) %>% 
+  mutate(group = group_louvain()) %>% 
+  mutate(modularity = graph_modularity(group)) %>% 
+  as_tibble() %>% 
+  head(1) %>% 
+  pull(modularity)))
+
+
+modularity_tbl <- tibble(modularity = modularity_scores, congress = 1:116)
+```
+
+## Modularity
 
 ```{r}
 tibble(modularity = modularity_scores, congress = 1:116) %>% 
-  ggplot(aes(x = congress, y = modularity)) +
+  mutate(year = (congress - 1)*2 + 1789) %>% 
+  ggplot(aes(x = year, y = modularity)) +
   geom_point(color = "#784f9e") +
   geom_line(color = "#89729E", alpha = 0.5) +
-  labs(x = "Congress", y = "Graph Modularity")
+  labs(x = "Congress", y = "Graph Modularity") +
+  annotate("text", 
+           label = "27th Congress", 
+           x = (28 - 1) * 2 + 1789, y = 0.415, 
+           hjust = 0, vjust = 0, color = annotation_color,
+           size = annotation_size) +
+  annotate("text", 
+           label = "111th Congress", 
+           x = (111 - 1) * 2 + 1789, y = 0.28, 
+           hjust = 0, vjust = 1, color = annotation_color, 
+           size = 3.5) +
+  lims(x = c(1789, 2040))
 ```
 
+27th congress saw John Tyler appointed after death of Henry Harrison, Whig party revolt, Whig Party members to riot outside the White House in the most violent demonstration on White House grounds in U.S. history.
+
+
+111th was recession era, obama's first congress, huge democratic majority, stonewalling by mcconell began
+
+## Interactive 
+
+```{r, fig.width=10}
+knitr::include_app("https://ellen-graham.shinyapps.io/interactive-congress/", height = "600px")
+```
