@@ -127,6 +127,8 @@ ggraph(higher_threshold, layout = cbind(x_svd, y_svd)) +
   
 ```
 
+
+
 ```{r}
 edge_tbl_list <- edge_tbl %>% 
   mutate(congress = as.numeric(congress)) %>% 
@@ -216,7 +218,7 @@ tibble(modularity = modularity_scores, congress = 1:116) %>%
 27th congress saw John Tyler appointed after death of Henry Harrison, Whig party revolt, Whig Party members to riot outside the White House in the most violent demonstration on White House grounds in U.S. history.
 
 
-111th was recession era, obama's first congress, huge democratic majority, stonewalling by mcconell began
+111th was recession era, Obama's first congress, huge democratic majority, stonewalling by McConell began
 
 ## Interactive 
 
