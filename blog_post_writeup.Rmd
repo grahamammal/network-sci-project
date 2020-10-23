@@ -7,10 +7,10 @@ output:
     theme: cosmo
 ---
 
-##Introduction: 
+## Introduction: 
 over the past few years, the United States congress has taken up some of the most important debates in decades. And as time has gone on, arguments over Coronavirus stimulus packages, impeachment, and Supreme Court confirmations have become increasingly polarized. From an outside perspective, Democrats and Republicans seem to really struggle to work together on anything. Whenever a bill gets introduced, responses to it always seem to be split along party lines.But is this inherently true? Is the Congress of the United States actually currently more polarized than it has been previously? By analyzing the way members of congress vote, we might be able to determine how deeply ingrained the partisan divide truly is.  
 
-##Methodology: 
+## Methodology: 
 
 Data Collection: 
 
@@ -45,13 +45,13 @@ knitr::opts_chunk$set(dev = "png", dev.args = list(type = "cairo-png"),
 
 ```
 
-##Singular Value Decomposition: 
+## Singular Value Decomposition: 
 The first method of analysis that we will apply to the matrix of shared votes, will be a singular value decomposition(SVD). The goal of this method is to see how spread out individual senators are. By taking the polar vectors of the matrix, timestamped for each congress, we are able to chart where each Senator belongs in relation to these vectors. This then showcases years where there is high partisan ship, as members of the same party will be located closly together. Meanwhile in years without such large partisanship, there will be more of a noticible spread. For example, during the mid 20th century, there is weren't noticable clusters of single party members, but in the past 30 years, the vertices have grouped together more along party lines. 
 
 
-## Animation
+## Network Across Congresses
 
-```{r}
+```{r, fig.width = 10, fig.height = 8}
 animation <- projected_coords_party %>% 
   ggplot() +
   geom_point(aes(x = V1, 
@@ -101,7 +101,7 @@ y_svd <- higher_threshold %>%
 
 ## Spectral Graph
 
-```{r}
+```{r, fig.width=10, fig.height=8}
 annotation_color = "#404040"
 annotation_size = 3.5
 
@@ -175,7 +175,7 @@ By taking a snapshot of one congress, and adding in the edges that would connect
 ## Betweenness
 Another way we can analyze the partisan divide of the U.s. Senate is to analyze the different types of centrality of senators, mainly betweeness centrality. In years without high levels of partisanship, senators work accross party lines regularly, resulting in a well connected graph. However in years with high levels of partisanship, the select few senators that act more bi-partisan will have high levels of betweeness centrality. In order to create paths between senators of different parties, you are more likely to go through these moderate politicians who work with both sides. When we analyze the betweeness centrality of senators from each year, we see that there has been a spike in the past 30 years of senators with higher betweeness centralities. This makes sense with our initial observations found in the SVD analysis. 
 
-```{r}
+```{r, fig.width=10, fig.height=8}
 senator_betweenness %>%
   mutate(year = (congress - 1)*2 + 1789) %>% 
   ggplot(aes(x = year, y = betweenness, color = party_name)) +
@@ -218,7 +218,7 @@ modularity_tbl <- tibble(modularity = modularity_scores, congress = 1:116)
 Another way that we can analyze the level of partisanship is to look at how storngly defined different components of modularity are. When patisanship is high, the graph modularity will be high to reflect the distictiveness of the different parties. Not only does this show us how divided congress is, but it can give us information on the makeups of those divides. For example, in 2008 Democrats won fillibuster proof majority, meaning Rebulican senators couldn't do anything to stop democrats from enacting whatever legislation they wanted. This insentivized bi-partisanship in order for conservative values to be represente, leading to a drop in the graph modularity of the 111th Congress.However, in 2010, when Republicans gained back a few seats, then Minority Leader McConnell made a point of stonewalling as much legislation as possible, causing the graph modularity to rise once again.  
 
 
-```{r}
+```{r, fig.width=10, fig.height=8}
 tibble(modularity = modularity_scores, congress = 1:116) %>% 
   mutate(year = (congress - 1)*2 + 1789) %>% 
   ggplot(aes(x = year, y = modularity)) +
@@ -238,10 +238,8 @@ tibble(modularity = modularity_scores, congress = 1:116) %>%
   lims(x = c(1789, 2040))
 ```
 
-27th congress saw John Tyler appointed after death of Henry Harrison, Whig party revolt, Whig Party members to riot outside the White House in the most violent demonstration on White House grounds in U.S. history.
 
-
-## Interactive 
+## Interactive Network
 
 ```{r, fig.width=10}
 knitr::include_app("https://ellen-graham.shinyapps.io/interactive-congress/", height = "600px")
