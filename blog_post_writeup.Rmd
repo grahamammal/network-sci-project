@@ -91,13 +91,13 @@ higher_threshold <- network_data_full %>%
   activate(nodes) %>% 
   filter(congress == 116)
 
-x_svd <- higher_threshold %>% 
+x_SVD <- higher_threshold %>% 
   activate(nodes) %>% 
-  pull(x_svd)
+  pull(x_SVD)
 
-y_svd <- higher_threshold %>% 
+y_SVD <- higher_threshold %>% 
   activate(nodes) %>% 
-  pull(y_svd)
+  pull(y_SVD)
 ```
 
 
@@ -108,7 +108,7 @@ annotation_color = "#404040"
 annotation_size = 3.5
 
 
-ggraph(higher_threshold, layout = cbind(x_svd, y_svd)) +
+ggraph(higher_threshold, layout = cbind(x_SVD, y_SVD)) +
   geom_edge_arc(aes(edge_color = edge_party), strength = 0.1, alpha = 0.3) +
   geom_node_point(aes(color = party_name), size = 1.5) +
   scale_edge_color_manual(values = c("#5768AC", "#FA5A50", "#784f9e", "#989898")) +
