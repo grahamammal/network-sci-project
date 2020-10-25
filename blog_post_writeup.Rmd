@@ -26,6 +26,7 @@ library(gganimate)
 library(ggraph)
 library(tidygraph)
 library(glue)
+library(imager)
 # Data from https://voteview.com/data
 vote_data <- vroom::vroom(here::here("data", "HSall_votes.csv"))
 member_data <- vroom::vroom(here::here("data", "HSall_members.csv"))
@@ -249,3 +250,28 @@ Here, we include an interactive visualization. It shows the svd projection for w
 ```{r, fig.width=10}
 knitr::include_app("https://ellen-graham.shinyapps.io/interactive-congress/", height = "600px")
 ```
+
+
+## Analysis of Individual Congressional Networks
+
+After analyzing the SVD, and fidning the trends of modularity and betweeness for each congress, it makes sense to take a look at some specific examples of the Senate from different years to see how the level of partisanship impacts how the graphs are built. By taking a look at timestamps that come either right before or after sudden changes in modularity, we can get a good picture of the political landscape at that time. 
+
+### The Period Before A Sharp Decline
+![Pre Civil War Senate](H:\gephi\network-sci-project-main\network-sci-project-main\Saved Pictures\1859_Senate.png)
+
+When we look at the line graph of Congressional modularities, the single biggest year drop occurs after the Congress of 1859. This makes sense, as this was the last congress before the Civil War. When Southern States succeeded from the Union, the main divide between senators was no longer there. What is intersting though, is how the Senators were divided before the war. In the 1859 congress, there were 42 Democratic Senators, 20 Republican Senators and 4 Senators represnting the Know Nothing Party. However, the modularity classes have a ratio of about 3:2 instead of 2:1. This means that, in this case, the modularity classes are not completely split among party lines. The explanation for this is that instead of the divide being based on parties, as it usually is, the divide is closly related to geography. Northern Democrats are much more likely to work with Republicans than Southern democrats are. As a result, the modularity network ends up grouping some of these northern Democrats in with the other northern Senators from the opposite party. 
+
+
+### A Period Of Constant Growth
+![1990's Senate](H:\gephi\network-sci-project-main\network-sci-project-main\Saved Pictures\1990s_Senate.png)
+When looking at the modularity line graph, there is only one area where there is a noticeable trend in one direction for an extended period of time. During the 1990's we see that there is a constant growth in polarization. Using the first and final Senates for this decade, we can get a good look at how partisan politics impacts the way senators interact with each other. When we compare the Senate of 1991 and the Senate of 1999, there are a few aspects of the networks that stand out. The first is how far apart the two parties have spread. In 1991, the two parties are closly connected lots of bi-partisan edges. In 1999, almost every bi-partisan combination includes one of only a few senators. This is the other aspect that really stands out. In 1999, there are clear swing vote Senators with high betweeness centrality. Because they are the only ones to regularly cross party lines, they end up having the most purple edgees. Given what we alredy know, this makes sense. When we look back at the betweeness centrality plot, we see that it is in the late 90s that swing vote Senators started to gain more prominence. 
+
+### Where We are Now. 
+![The Senate of the Late 2010s](H:\gephi\network-sci-project-main\network-sci-project-main\Saved Pictures\2010s_Senate.png)
+
+We started this project to see if we currently are living through the time with the most partisan congress in history. But while we have learned that partisanship has dramatically increased over the past 30 years, the current iteration of the U.S. Senate is not the more polarized. It turns out the 114th Senate, starting in 2015, claims that title. If we compare the 2015 Senate to today's Senate, we see the signs of a less polarized Senate. There are more moderate Senators who work with both sides of the isle regularly. As a result, the two parties have more bi-partisan connections. The reason for this small increase in bipartisanship were the election of Democratic senators in conservative states. In the first two years of President Trump's term, Senators such as Senator Jones from Alabama and Senator Sinema from Arizona were both elected. Both senators became very strong moderates, often working with republicans and bringing the two parties closer together. While if we were to compare the 2019 Senate to the 1991 Senate, we see that we are living through a period of patisanship, it is currently not the worst it has ever been. 
+
+
+## Conclusion
+Throughout the past 250 years of American politics, political parties have been the most consistent divide in our congressional delegations. However, it wasn't until the 1990s that the extremity of the partisan divide became clear. Over the past few decades, polarization of the United States Senate has steadily increased. It reached its current apex during the final term of President Obama and still remains high today. It is unknown if we will a continuation of this upward trend or if the divide will begin to break down. Either way, it is important that we hold our elected officials accountable, because strict partisanship, where nothing can get done, doesn't help anyone. 
+
