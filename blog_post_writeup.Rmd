@@ -9,11 +9,11 @@ output:
 
 ## Introduction: 
 
-Over the past few years, the United States congress has taken up some of the most important debates in decades. And as time has gone on, arguments over Coronavirus stimulus packages, impeachment, and Supreme Court confirmations have become increasingly polarized. From an outside perspective, Democrats and Republicans seem to really struggle to work together on anything. Whenever a bill gets introduced, responses to it always seem to be split along party lines. But is this worse than usual? Is the Congress of the United States actually currently more polarized than it has been previously? By analyzing the way members of congress vote, we might be able to determine how deeply ingrained the partisan divide truly is.  
+Over the past few years, the United States Congress has taken up some of the most important debates in decades. And as time has gone on, arguments over Coronavirus stimulus packages, impeachment, and Supreme Court confirmations have become increasingly polarized. From an outside perspective, Democrats and Republicans seem to really struggle to work together on anything. Whenever a bill gets introduced, responses to it always seem to be split along party lines. But is this worse than usual? Is the Congress of the United States actually currently more polarized than it has been previously? By analyzing the way members of Congress vote, we might be able to determine how deeply ingrained the partisan divide truly is.  
 
 ## Methodology: 
 
-In order to determine how divided Congress is, we need a way to measure how individual politicians relate to each other. We decided that the best way to do this was to analzye voting records. Getting data from [VoteView](voteview.com), we were able to filter out how each Senator voted on each bill. We then established a network matrix where senators were the nodes and the edges between them were votes, weighted by how often the two senators voted together and filtered so that only pairs of senators who voted with each other on more than the median amount would retain an edge. We also were then able to timestamp the data by congress so that we could analyze the change in the voting patterns over time. 
+To determine how divided Congress is, we need a way to measure how individual politicians relate to each other. We decided that the best way to do this was to analyze voting records. Getting data from [VoteView](voteview.com), we were able to filter out how each Senator voted on each bill. We then established a network matrix where senators were the nodes and the edges between them were votes, weighted by how often the two senators voted together and filtered so that only pairs of senators who voted with each other on more than the median amount would retain an edge. We also were then able to timestamp the data by Congress so that we could analyze the change in the voting patterns over time. 
 
 
 
@@ -26,7 +26,6 @@ library(gganimate)
 library(ggraph)
 library(tidygraph)
 library(glue)
-library(imager)
 # Data from https://voteview.com/data
 vote_data <- vroom::vroom(here::here("data", "HSall_votes.csv"))
 member_data <- vroom::vroom(here::here("data", "HSall_members.csv"))
@@ -44,27 +43,28 @@ knitr::opts_chunk$set(dev = "png", dev.args = list(type = "cairo-png"),
 ```
 
 ## Singular Value Decomposition: 
-The first method of analysis that we will apply to the matrix of shared votes, will be a singular value decomposition(SVD). We will use this to determine how far distinct voting patterns are. By taking the 1st and 2nd left singular vectors of each congresses voting matrix, we are able to find the two vectors that best define how senators vote. After projecting senators onto these vectors, we can see how each individual senator is clustered on these axis of voting. 
+The first method of analysis that we will apply to the matrix of shared votes, will be a singular value decomposition(SVD). We will use this to determine how far distinct voting patterns are. By taking the 1st and 2nd left singular vectors of each Congresses voting matrix, we are able to find the two vectors that best define how senators vote. After projecting senators onto these vectors, we can see how each individual senator is clustered on these axes of voting. 
 
 
 ## Network Across Congresses
 
 ```{r, fig.width = 10, fig.height = 8}
 animation <- projected_coords_party %>% 
+  mutate(party_name = factor(party_name, levels = c("Democrat", "Republican", "Other"))) %>% 
   ggplot() +
   geom_point(aes(x = V1, 
                  y = V2, 
                  group = icpsr,
                  color = party_name)) +
-  scale_color_manual(values = c("#5768AC", "#989898", "#FA5A50")) +
+  scale_color_manual(values = c("#5768AC", "#FA5A50", "#989898")) +
   labs(x = "First Singular Vector",
        y = "Second Singular Vector", 
        color = NULL) +
   transition_states((congress - 1)*2 + 1789, 
-                    transition_length = 4,
-                    state_length = 1) +
-  ease_aes('linear') +
-  ggtitle('Congress Start Year: {closest_state}') +
+                    transition_length = 6,
+                    state_length = 2) +
+  ease_aes('cubic-in-out') +
+  ggtitle('Congress: {(as.numeric(closest_state) - 1789)/2 +1}, Start Year: {closest_state}') +
   enter_fade() +
   exit_fade()
 
@@ -72,12 +72,16 @@ animation <- projected_coords_party %>%
 
 animate(
   animation,
-  nframes = 5*116
+  nframes = 8*116,
+  width = 10,
+  height = 8,
+  units = "in",
+  res = 72
 )
 
 ```
 
-Looking at the above animation, we can see some interesting trends. For example, in the mid 20th century, around the the Second World War, there was little clustering, and senators were relatively evenly spread out along the first singular vector, which appears to best represent party. However, over the last thirty years, vertices have moved further and further apart along the first singular vector, meaning the parties are voting less and less similarly. 
+Looking at the above animation, we can see some interesting trends. For example, in the mid 20th century, around the Second World War, there was little clustering, and senators were relatively evenly spread out along the first singular vector, which appears to best represent political party. However, over the last thirty years, vertices have moved further and further apart along the first singular vector, meaning the parties are voting less and less similarly.
 
 ```{r}
 higher_threshold <- network_data_full %>% 
@@ -144,9 +148,11 @@ ggraph(higher_threshold, layout = cbind(x_svd, y_svd)) +
 ```
 
 
-By taking a snapshot of one congress, and adding in the edges that would connect the Senators in the voting matrix, we can gain new insight into how a specific congress is made up.  For example, this  graph showcases the current day United States senate. Republicans, being in control by a slim majority, regularly vote together and thus are mainly clustered together at the extremes of the singular vectors. Meanwhile democrats have more of a wide range of policies and beliefs, and because they're in the minority, many of their votes are symbolic, they end up not being as unified.  Moderate democrats such as Joe Manchin will end up relatively close to the Republican hub with many cross party edges. Meanwhile, progressive senators, such as Bernie Sanders end up isolated with few connection to the rest of the party. We also get to see nuances of individual senates. Johnny Isakson and Kelly Loeffler both vote with their republican colleagues regularly. However, both Senators were appointed recently and haven't served a full term. Thus they don't have the amount of votes cast in order for edges to form with the other members of their party. 
+
+By taking a snapshot of one Congress, and adding in the edges that would connect the Senators in the voting matrix, we can gain new insight into how a specific Congress is made up.  For example, this graph showcases the current-day United States senate. Republicans, being in control by a slim majority, regularly vote together and thus are mainly clustered together at the extremes of the singular vectors. Meanwhile, Democrats have more of a wide range of policies and beliefs, and because they're in the minority, many of their votes are symbolic, they end up not being as unified.  Moderate Democrats such as Joe Manchin will end up relatively close to the Republican hub with many cross-party edges. Meanwhile, progressive senators, such as Bernie Sanders end up isolated with few connections to the rest of the party. We also get to see the nuances of individual senates. Johnny Isakson and Kelly Loeffler both vote with their Republican colleagues regularly. However, both Senators were appointed recently and haven't served a full term. Thus they don't enough votes cast in order for edges to form with the other members of their party. 
 
 On a technical note, the voting network is fully connected, because senators often vote on mundane things everyone agrees on. In the above graph, we only display edges that are in the top 90th percentile of voting together.
+
 
 
 ```{r}
@@ -199,9 +205,10 @@ senator_betweenness %>%
 
 ```
 
-Another way we can analyze the partisan divide of the U.s. Senate is to analyze the different types of centrality of senators, mainly betweeness centrality. In years without high levels of partisanship, senators work across party lines regularly, resulting in a well connected graph. However in years with high levels of partisanship, the select few senators that act more bi-partisan will have high levels of betweeness centrality. In order to create paths between senators of different parties, you are more likely to go through these moderate politicians who work with both sides. When we analyze the betweeness centrality of senators from each year, we see that there has been a spike in the past 30 years of senators with higher betweeness centralities. This makes sense with our initial observations found in the SVD analysis. 
+Another way we can analyze the partisan divide of the U.S. Senate is to analyze the different types of centrality of senators, mainly betweenness centrality. In years without high levels of partisanship, senators work across party lines regularly, resulting in a well-connected graph. However in years with high levels of partisanship, the select few senators that act more bi-partisan will have high levels of betweenness centrality. In order to create paths between senators of different parties, you are more likely to go through these moderate politicians who work with both sides. When we analyze the betweenness centrality of senators from each year, we see that there has been a spike in the past 30 years of senators with higher betweenness centralities. This makes sense with our initial observations found in the SVD analysis. 
 
-Another technical note, for both the betweenness and upcoming modularity calculations, we have use a threshold where 2 senators are connected if they are in the top 50th percentile of voting together. The results are stable in the range of the 45th to 65th percentile. Any below that, we see that the graph is so well connected there is almost no variation in betweenness. Any higher, and the graphs begin to become disconnected, making betweenness calculations less meaningful. Thus, we believe that this is a reasonable threshold for our analysis. 
+Another technical note, for both the betweenness and upcoming modularity calculations, we use a threshold where 2 senators are connected if they are in the top 50th percentile of voting together. The results are stable in the range of the 45th to 65th percentile. Any lower than that, we see that the graph is so well connected there is almost no variation in betweenness. Any higher and the graphs begin to become disconnected, making betweenness calculations less meaningful. Thus, we believe that this is a reasonable threshold for our analysis. 
+
 
 ```{r}
 
@@ -219,9 +226,7 @@ modularity_tbl <- tibble(modularity = modularity_scores, congress = 1:116)
 
 ## Modularity
 
-Another way that we can analyze the level of partisanship is to look at how modular the graph is. When partisanship is high, the graph modularity will be high to reflect the distinctiveness of the different parties. Not only does this show us how divided congress is, but it can give us information on the makeups of those divides. For example, in 2008 Democrats won filibuster proof majority, meaning Republican senators couldn't do anything to stop democrats from enacting whatever legislation they wanted. This might have lead to a drop in the graph modularity of the 111th Congress. However, in 2010, when Republicans gained back a few seats, then Minority Leader McConnell made a point of stonewalling as much legislation as possible, causing the graph modularity to rise once again.  
-
-
+Another way that we can analyze the level of partisanship is to look at how modular the graph is. When partisanship is high, the graph modularity will be high to reflect the distinctiveness of the different parties. Not only does this show us how divided Congress is, but it can give us information on the makeups of those divides. For example, in 2008 Democrats won a filibuster-proof majority, meaning Republican senators couldn't do anything to stop Democrats from enacting whatever legislation they wanted. This might have lead to a drop in the graph modularity of the 111th Congress. However, in 2010, when Republicans gained back a few seats, then Minority Leader McConnell made a point of stonewalling as much legislation as possible, causing the graph modularity to rise once again.  
 ```{r, fig.width=10, fig.height=8}
 tibble(modularity = modularity_scores, congress = 1:116) %>% 
   mutate(year = (congress - 1)*2 + 1789) %>% 
@@ -245,7 +250,7 @@ tibble(modularity = modularity_scores, congress = 1:116) %>%
 
 ## Interactive Network
 
-Here, we include an interactive visualization. It shows the svd projection for whichever congress you select, with nodes sized by either betweenness of PageRank. If the interactive breaks, try reloading the page, or visiting its source directly [here](https://ellen-graham.shinyapps.io/interactive-congress/) 
+Here, we include an interactive visualization. It shows the SVD projection from above. Recall, the x-axis is the projection of each senator onto the first left singular vector, which says where each senator stands on the vector that best explains how senators voted, and the y-axis is the projection onto the second left singular vector. The adjacency matrices the SVD was calculated on for each Congress contains all votes, where an edge between two senators is weighted by the number of times they voted together. The nodes are sized by either betweenness or PageRank. If the interactive breaks, try reloading the page or visiting its source directly [here](https://ellen-graham.shinyapps.io/interactive-congress/). 
 
 ```{r, fig.width=10}
 knitr::include_app("https://ellen-graham.shinyapps.io/interactive-congress/", height = "600px")
@@ -254,24 +259,27 @@ knitr::include_app("https://ellen-graham.shinyapps.io/interactive-congress/", he
 
 ## Analysis of Individual Congressional Networks
 
-After analyzing the SVD, and fidning the trends of modularity and betweeness for each congress, it makes sense to take a look at some specific examples of the Senate from different years to see how the level of partisanship impacts how the graphs are built. By taking a look at timestamps that come either right before or after sudden changes in modularity, we can get a good picture of the political landscape at that time. 
+After analyzing the SVD, and finding the trends of modularity and betweenness for each Congress, it makes sense to take a look at some specific examples of the Senate from different years to see how the level of partisanship impacts how the graphs are built. By taking a look at timestamps that come either right before or after sudden changes in modularity, we can get a good picture of the political landscape at that time. 
 
 ### The Period Before A Sharp Decline
-![Pre Civil War Senate](H:\gephi\network-sci-project-main\network-sci-project-main\Saved Pictures\1859_Senate.png)
+![Pre Civil War Senate](Saved Pictures\1859_Senate.png)
 
-When we look at the line graph of Congressional modularities, the single biggest year drop occurs after the Congress of 1859. This makes sense, as this was the last congress before the Civil War. When Southern States succeeded from the Union, the main divide between senators was no longer there. What is intersting though, is how the Senators were divided before the war. In the 1859 congress, there were 42 Democratic Senators, 20 Republican Senators and 4 Senators represnting the Know Nothing Party. However, the modularity classes have a ratio of about 3:2 instead of 2:1. This means that, in this case, the modularity classes are not completely split among party lines. The explanation for this is that instead of the divide being based on parties, as it usually is, the divide is closly related to geography. Northern Democrats are much more likely to work with Republicans than Southern democrats are. As a result, the modularity network ends up grouping some of these northern Democrats in with the other northern Senators from the opposite party. 
+When we look at the line graph of Congressional modularities, the single biggest year drop occurs after the Congress of 1859. This makes sense, as this was the last Congress before the Civil War. When the Southern States succeeded from the Union, the main divide between senators was no longer there. What is interesting though, is how the Senators were divided before the war. In the 1859 Congress, there were 42 Democratic Senators, 20 Republican Senators, and 4 Senators representing the Know-Nothing Party. However, the modularity classes have a ratio of about 3:2 instead of 2:1. This means that, in this case, the modularity classes are not completely split among party lines. The explanation for this is that instead of the divide being based on parties as it usually is, the divide is closely related to geography. Northern Democrats are much more likely to work with Republicans than Southern Democrats are. As a result, the modularity network ends up grouping some of these northern Democrats in with the other northern Senators from the opposite party. 
 
 
 ### A Period Of Constant Growth
-![1990's Senate](H:\gephi\network-sci-project-main\network-sci-project-main\Saved Pictures\1990s_Senate.png)
-When looking at the modularity line graph, there is only one area where there is a noticeable trend in one direction for an extended period of time. During the 1990's we see that there is a constant growth in polarization. Using the first and final Senates for this decade, we can get a good look at how partisan politics impacts the way senators interact with each other. When we compare the Senate of 1991 and the Senate of 1999, there are a few aspects of the networks that stand out. The first is how far apart the two parties have spread. In 1991, the two parties are closly connected lots of bi-partisan edges. In 1999, almost every bi-partisan combination includes one of only a few senators. This is the other aspect that really stands out. In 1999, there are clear swing vote Senators with high betweeness centrality. Because they are the only ones to regularly cross party lines, they end up having the most purple edgees. Given what we alredy know, this makes sense. When we look back at the betweeness centrality plot, we see that it is in the late 90s that swing vote Senators started to gain more prominence. 
+![1990's Senate](Saved Pictures\1990s_Senate.png)
+When looking at the modularity line graph, there is only one area where there is a noticeable trend in one direction for an extended period of time. During the 1990's we see that there is a constant growth in polarization. Using the first and final Senates for this decade, we can get a good look at how partisan politics impacts the way senators interact with each other. When we compare the Senate of 1991 and the Senate of 1999, there are a few aspects of the networks that stand out. The first is how far apart the two parties have spread. In 1991, the two parties are closely connected with lots of bi-partisan edges. In 1999, almost every bi-partisan combination includes one of only a few senators. This is the other aspect that really stands out. In 1999, there are clear swing vote Senators with high betweenness centrality. Because they are the only ones to regularly cross party lines, they end up having the most purple edges. Given what we already know, this makes sense. When we look back at the betweenness centrality plot, we see that it is in the late 90s that swing vote Senators started to gain more prominence. 
+
 
 ### Where We are Now. 
-![The Senate of the Late 2010s](H:\gephi\network-sci-project-main\network-sci-project-main\Saved Pictures\2010s_Senate.png)
+![The Senate of the Late 2010s](Saved Pictures\2010s_Senate.png)
 
-We started this project to see if we currently are living through the time with the most partisan congress in history. But while we have learned that partisanship has dramatically increased over the past 30 years, the current iteration of the U.S. Senate is not the more polarized. It turns out the 114th Senate, starting in 2015, claims that title. If we compare the 2015 Senate to today's Senate, we see the signs of a less polarized Senate. There are more moderate Senators who work with both sides of the isle regularly. As a result, the two parties have more bi-partisan connections. The reason for this small increase in bipartisanship were the election of Democratic senators in conservative states. In the first two years of President Trump's term, Senators such as Senator Jones from Alabama and Senator Sinema from Arizona were both elected. Both senators became very strong moderates, often working with republicans and bringing the two parties closer together. While if we were to compare the 2019 Senate to the 1991 Senate, we see that we are living through a period of patisanship, it is currently not the worst it has ever been. 
+We started this project to see if we currently are living through the time with the most partisan Congress in history. But while we have learned that partisanship has dramatically increased over the past 30 years, the current iteration of the U.S. Senate is not the more polarized. It turns out the 114th Senate, starting in 2015, claims that title. If we compare the 2015 Senate to today's Senate, we see the signs of a less polarized Senate. There are more moderate Senators who work with both sides of the aisle regularly. As a result, the two parties have more bipartisan connections. The reason for this small increase in bipartisanship was the election of Democratic senators in conservative states. In the first two years of President Trump's term, Senators such as Senator Jones from Alabama and Senator Sinema from Arizona were both elected. Both senators became very strong moderates, often working with Republicans and bringing the two parties closer together. While if we were to compare the 2019 Senate to the 1991 Senate, we see that we are living through a period of partisanship, it is currently not the worst it has ever been.  
 
 
 ## Conclusion
-Throughout the past 250 years of American politics, political parties have been the most consistent divide in our congressional delegations. However, it wasn't until the 1990s that the extremity of the partisan divide became clear. Over the past few decades, polarization of the United States Senate has steadily increased. It reached its current apex during the final term of President Obama and still remains high today. It is unknown if we will a continuation of this upward trend or if the divide will begin to break down. Either way, it is important that we hold our elected officials accountable, because strict partisanship, where nothing can get done, doesn't help anyone. 
+
+Throughout the past 250 years of American politics, political parties have been the most consistent divide in our Congressional delegations. However, it wasn't until the 1990s that the extremity of the partisan divide became clear. Over the past few decades, the polarization of the United States Senate has steadily increased. It reached its current apex during the final term of President Obama and still remains high today. It is unknown if we will a continuation of this upward trend or if the divide will begin to break down. Either way, it is important that we hold our elected officials accountable, because strict partisanship, where nothing can get done, doesn't help anyone. 
+
 
