@@ -43,11 +43,13 @@ server <- function(input, output) {
     output$congress_plot <- renderPlot({
         size_by <- tolower((input$centrality))
         
-        projected_coords %>%
+        dataset <- projected_coords %>%
             mutate(party_name = factor(party_name, levels = c("Democrat",
                                                               "Republican",
                                                               "Other"))) %>% 
-            filter(congress == input$congress) %>% 
+            filter(congress == input$congress)
+        
+        dataset %>% 
             ggplot() +
             geom_point(aes(x = V1, 
                            y = V2, 
@@ -58,7 +60,7 @@ server <- function(input, output) {
             labs(x = "First Singular Vector",
                  y = "Second Singular Vector", 
                  color = "Senator Party",
-                 title = glue("Congress: {input$congress}, Start Year: {(input$congress-1)*2 + 1789}"),
+                 title = glue("Congress: {input$congress}, Start Year: {(input$congress-1)*2 + 1789},\nModularity: {round(dataset$modularity[1], 2)}"),
                  size = input$centrality) +
           theme_minimal()
     })
